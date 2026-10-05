@@ -39,7 +39,7 @@ Iedzīvotāji zvana klientu centram un lūdz atsaukt iesniegumu, piemēram, ja p
 |---|---|---|
 | Vai iemeslam ir garuma ierobežojums? | Jā, 10–500 rakstzīmes | Produkta īpašnieks, 2026-10-02 |
 | Vai pēc atsaukšanas mainās atbildes termiņš (`dueDate`)? | Nē | Produkta īpašnieks, 2026-10-02 |
-| Vai var atsaukt iesniegumu ar statusu `FORWARDED`? | **Atvērts** | — |
+| Vai var atsaukt iesniegumu ar statusu `FORWARDED`? | Nē | Produkta īpašnieks, 2026-10-05 |
 
 ## Ārpus tvēruma (out of scope)
 
