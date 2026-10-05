@@ -46,17 +46,17 @@ def register_error_handlers(app: FastAPI) -> None:
         # Ievadīto vērtību atbildē neatkārtojam: tajā var būt personas dati.
         details = [{"field": _field(e), "issue": _issue(e)} for e in exc.errors()]
         return error_response(
-            400, "VALIDATION_ERROR", "Request validation failed", details
+            400, "VALIDATION_ERROR", "Pieprasījumā ir kļūdaini dati", details
         )
 
     @app.exception_handler(SubmissionNotFound)
     async def not_found(request: Request, exc: SubmissionNotFound):
-        return error_response(404, "NOT_FOUND", "Submission not found")
+        return error_response(404, "NOT_FOUND", "Iesniegums nav atrasts")
 
     @app.exception_handler(InvalidState)
     async def invalid_state(request: Request, exc: InvalidState):
         return error_response(
-            409, "INVALID_STATE", "Action not allowed in the current status"
+            409, "INVALID_STATE", "Darbība nav atļauta pašreizējā statusā"
         )
 
     @app.exception_handler(Exception)

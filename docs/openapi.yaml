@@ -582,7 +582,7 @@ components:
             message:
               type: string
               description: Cilvēkam lasāms apraksts. Bez personas datiem un iekšējas informācijas.
-              example: Request validation failed
+              example: Pieprasījumā ir kļūdaini dati
             details:
               type: array
               description: Katra lauka kļūda atsevišķi (tikai `VALIDATION_ERROR`)
@@ -608,7 +608,7 @@ components:
           example:
             error:
               code: VALIDATION_ERROR
-              message: Request validation failed
+              message: Pieprasījumā ir kļūdaini dati
               details:
                 - field: personalCode
                   issue: INVALID_FORMAT
@@ -621,7 +621,7 @@ components:
           example:
             error:
               code: NOT_FOUND
-              message: Submission not found
+              message: Iesniegums nav atrasts
     InvalidState:
       description: Darbība nav atļauta pašreizējā statusā. Iesniegums netiek mainīts.
       content:
@@ -631,4 +631,4 @@ components:
           example:
             error:
               code: INVALID_STATE
-              message: Action not allowed in the current status
+              message: Darbība nav atļauta pašreizējā statusā

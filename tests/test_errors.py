@@ -26,3 +26,19 @@ def test_unexpected_error_hides_exception_text(client, monkeypatch, caplog):
     }
     assert "RuntimeError" in caplog.text
     assert SECRET not in caplog.text
+
+
+def test_error_messages_are_in_latvian(client, valid_payload):
+    created = client.post("/submissions", json=valid_payload).json()
+    withdraw = f"/submissions/{created['id']}/withdraw"
+    reason = {"reason": "Problēma jau ir atrisināta"}
+    client.post(withdraw, json=reason)
+
+    cases = [
+        (client.post(withdraw, json={}), "Pieprasījumā ir kļūdaini dati"),
+        (client.get("/submissions/IES-2026-999999"), "Iesniegums nav atrasts"),
+        (client.post(withdraw, json=reason), "Darbība nav atļauta pašreizējā statusā"),
+    ]
+
+    for response, message in cases:
+        assert response.json()["error"]["message"] == message
