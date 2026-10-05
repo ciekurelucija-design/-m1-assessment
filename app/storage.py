@@ -3,6 +3,7 @@
 Pēc restarta dati atgriežas sākuma stāvoklī ar trim sintētiskiem iesniegumiem.
 """
 
+import json
 import logging
 import sqlite3
 import threading
@@ -242,8 +243,33 @@ def update_status(submission_id: str, status: str) -> dict | None:
     if cursor.rowcount == 0:
         return None
     record = get(submission_id)
-    logger.info("Statuss mainīts: %s", record)
+    # Žurnālā tikai ID un statuss. Ierakstā ir personas dati.
+    logger.info("Statuss mainīts: %s -> %s", submission_id, status)
     return record
+
+
+def transition(
+    submission_id: str, allowed: set[str], status: str, action: str, detail: str
+) -> dict | None:
+    """Maina statusu un raksta auditu atomāri, ja pašreizējais statuss ir atļauts.
+
+    Atgriež atjaunoto ierakstu vai None, ja ID nav atrasts vai statuss nav atļauts.
+    """
+    with _lock, _conn:
+        # Atļautos statusus nodod kā vienu JSON parametru: SQL teksts nemainās.
+        cursor = _conn.execute(
+            "UPDATE submissions SET status = ? WHERE id = ? "
+            "AND status IN (SELECT value FROM json_each(?))",
+            (status, submission_id, json.dumps(sorted(allowed))),
+        )
+        if cursor.rowcount == 0:
+            return None
+        _conn.execute(
+            "INSERT INTO audit (submissionId, at, action, detail) VALUES (?, ?, ?, ?)",
+            (submission_id, clock.now().isoformat(), action, detail),
+        )
+    logger.info("Statuss mainīts: %s -> %s", submission_id, status)
+    return get(submission_id)
 
 
 def update_due_date(submission_id: str, due_date: str) -> dict:
@@ -263,8 +289,9 @@ def update_due_date(submission_id: str, due_date: str) -> dict:
 def find_institution(code: str) -> dict | None:
     """Iestāde pēc koda vai None, ja tādas nav."""
     with _lock:
+        # Parametrizēts vaicājums: ievade nekad nekļūst par SQL daļu.
         row = _conn.execute(
-            f"SELECT code, name FROM institutions WHERE code = '{code}'"
+            "SELECT code, name FROM institutions WHERE code = ?", (code,)
         ).fetchone()
     return {"code": row["code"], "name": row["name"]} if row else None
 

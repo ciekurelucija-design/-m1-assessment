@@ -1,11 +1,19 @@
 """Kļūdu atbildes pēc līguma (API contract) vienotās kļūdu shēmas."""
 
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+logger = logging.getLogger("ezermala.errors")
+
 
 class SubmissionNotFound(Exception):
+    pass
+
+
+class InvalidState(Exception):
     pass
 
 
@@ -38,13 +46,22 @@ def register_error_handlers(app: FastAPI) -> None:
         # Ievadīto vērtību atbildē neatkārtojam: tajā var būt personas dati.
         details = [{"field": _field(e), "issue": _issue(e)} for e in exc.errors()]
         return error_response(
-            400, "VALIDATION_ERROR", "Request validation failed", details
+            400, "VALIDATION_ERROR", "Pieprasījumā ir kļūdaini dati", details
         )
 
     @app.exception_handler(SubmissionNotFound)
     async def not_found(request: Request, exc: SubmissionNotFound):
-        return error_response(404, "NOT_FOUND", "Submission not found")
+        return error_response(404, "NOT_FOUND", "Iesniegums nav atrasts")
+
+    @app.exception_handler(InvalidState)
+    async def invalid_state(request: Request, exc: InvalidState):
+        return error_response(
+            409, "INVALID_STATE", "Darbība nav atļauta pašreizējā statusā"
+        )
 
     @app.exception_handler(Exception)
     async def unexpected_error(request: Request, exc: Exception):
-        return error_response(500, "INTERNAL_ERROR", str(exc))
+        # Kļūdas tekstā var būt personas dati vai iekšēja informācija.
+        # Žurnālā tikai tips, atbildē nemainīgs teksts.
+        logger.error("Neparedzēta kļūda: %s", type(exc).__name__)
+        return error_response(500, "INTERNAL_ERROR", "Kļūdas paziņojums")

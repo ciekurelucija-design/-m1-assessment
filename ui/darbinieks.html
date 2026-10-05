@@ -19,6 +19,12 @@
     th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
     th { background: #e8ecf1; }
     .count { margin-top: 12px; color: #444; }
+    button.secondary { color: var(--navy); background: #fff; border: 1px solid var(--line); }
+    .withdraw-form textarea { width: 100%; min-height: 64px; padding: 8px; font: inherit; border: 1px solid var(--line); border-radius: 6px; margin: 4px 0 8px; }
+    .withdraw-form .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .notice { padding: 10px; border-radius: 6px; margin-top: 8px; }
+    .notice.error { background: #fdece7; border: 1px solid #e76f51; }
+    .notice.ok { background: #e6f4f2; border: 1px solid var(--teal); }
   </style>
 </head>
 <body>
@@ -50,9 +56,10 @@
       <button type="submit">Meklēt</button>
     </form>
     <div class="count" id="count"></div>
+    <div id="notice" aria-live="polite"></div>
     <table>
       <thead>
-        <tr><th>Numurs</th><th>Statuss</th><th>Tēma</th><th>Saņemts</th><th>Termiņš</th><th>Kanāls</th></tr>
+        <tr><th>Numurs</th><th>Statuss</th><th>Tēma</th><th>Saņemts</th><th>Termiņš</th><th>Kanāls</th><th>Darbība</th></tr>
       </thead>
       <tbody id="rows"></tbody>
     </table>
@@ -60,6 +67,20 @@
   <script>
     const rows = document.getElementById("rows");
     const count = document.getElementById("count");
+    const notice = document.getElementById("notice");
+    const COLUMNS = 7;
+    const STATUS_TEXT = {
+      RECEIVED: "Saņemts",
+      IN_PROGRESS: "Izskatīšanā",
+      FORWARDED: "Pārsūtīts",
+      ANSWERED: "Atbildēts",
+      WITHDRAWN: "Atsaukts",
+    };
+    const ISSUE_TEXT = {
+      REQUIRED: "obligāts lauks",
+      INVALID_FORMAT: "nederīga vērtība",
+      TOO_LONG: "pārāk garš",
+    };
 
     function cell(text) {
       const td = document.createElement("td");
@@ -67,8 +88,95 @@
       return td;
     }
 
+    function showNotice(kind, lines) {
+      notice.className = "notice " + kind;
+      notice.innerHTML = "";
+      lines.forEach((line, i) => {
+        if (i) notice.appendChild(document.createElement("br"));
+        notice.appendChild(document.createTextNode(line));
+      });
+    }
+
+    // Validāciju dara API. Forma tikai parāda API atbildi.
+    function apiErrorLines(status, body) {
+      const error = (body && body.error) || {};
+      const lines = [`Neizdevās atsaukt (HTTP ${status}${error.code ? ", " + error.code : ""})`];
+      if (error.message) lines.push(error.message);
+      (error.details || []).forEach((d) => {
+        lines.push(`${d.field}: ${ISSUE_TEXT[d.issue] || d.issue}`);
+      });
+      return lines;
+    }
+
+    function openWithdrawForm(tr, id) {
+      const existing = tr.nextElementSibling;
+      if (existing && existing.classList.contains("withdraw-row")) {
+        existing.remove();
+        return;
+      }
+      const formRow = document.createElement("tr");
+      formRow.className = "withdraw-row";
+      const td = document.createElement("td");
+      td.colSpan = COLUMNS;
+      const form = document.createElement("form");
+      form.className = "withdraw-form";
+      const label = document.createElement("label");
+      label.textContent = `Atsaukšanas iemesls (${id})`;
+      label.htmlFor = "reason-" + id;
+      const reason = document.createElement("textarea");
+      reason.id = "reason-" + id;
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      const submit = document.createElement("button");
+      submit.type = "submit";
+      submit.textContent = "Apstiprināt atsaukšanu";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "secondary";
+      cancel.textContent = "Atcelt";
+      cancel.addEventListener("click", () => formRow.remove());
+      actions.append(submit, cancel);
+      form.append(label, reason, actions);
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        withdraw(id, reason.value, submit);
+      });
+      td.appendChild(form);
+      formRow.appendChild(td);
+      tr.after(formRow);
+      reason.focus();
+    }
+
+    async function withdraw(id, reason, submit) {
+      submit.disabled = true;
+      try {
+        const response = await fetch(`/submissions/${encodeURIComponent(id)}/withdraw`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          // Tukšu iemeslu nesūtām: API pats pasaka, ka tas trūkst.
+          body: JSON.stringify(reason === "" ? {} : { reason }),
+        });
+        let body = null;
+        try { body = await response.json(); } catch (e) { /* nav JSON */ }
+        if (response.status === 200) {
+          await load();
+          showNotice("ok", [`Iesniegums ${id} atsaukts. Statuss: ${STATUS_TEXT[body.status] || body.status}`]);
+        } else {
+          showNotice("error", apiErrorLines(response.status, body));
+        }
+      } catch (error) {
+        showNotice("error", ["Neizdevās sazināties ar serveri."]);
+      } finally {
+        submit.disabled = false;
+      }
+    }
+
     async function load(event) {
-      if (event) event.preventDefault();
+      if (event) {
+        event.preventDefault();
+        notice.className = "";
+        notice.textContent = "";
+      }
       const params = new URLSearchParams();
       const status = document.getElementById("status").value;
       const topic = document.getElementById("topic").value;
@@ -84,8 +192,19 @@
       count.textContent = "Atrasti: " + data.length;
       for (const s of data) {
         const tr = document.createElement("tr");
-        [s.id, s.status, s.topic, s.receivedAt.slice(0, 10), s.dueDate, s.replyChannel]
+        [s.id, STATUS_TEXT[s.status] || s.status, s.topic, s.receivedAt.slice(0, 10), s.dueDate, s.replyChannel]
           .forEach((value) => tr.appendChild(cell(value)));
+        const action = document.createElement("td");
+        // Atsauktam iesniegumam pogu nerāda. Pārējos noteikumus pārbauda API.
+        if (s.status !== "WITHDRAWN") {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "secondary";
+          button.textContent = "Atsaukt";
+          button.addEventListener("click", () => openWithdrawForm(tr, s.id));
+          action.appendChild(button);
+        }
+        tr.appendChild(action);
         rows.appendChild(tr);
       }
     }
