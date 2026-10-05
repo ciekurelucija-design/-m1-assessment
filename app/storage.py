@@ -289,8 +289,9 @@ def update_due_date(submission_id: str, due_date: str) -> dict:
 def find_institution(code: str) -> dict | None:
     """Iestāde pēc koda vai None, ja tādas nav."""
     with _lock:
+        # Parametrizēts vaicājums: ievade nekad nekļūst par SQL daļu.
         row = _conn.execute(
-            f"SELECT code, name FROM institutions WHERE code = '{code}'"
+            "SELECT code, name FROM institutions WHERE code = ?", (code,)
         ).fetchone()
     return {"code": row["code"], "name": row["name"]} if row else None
 
