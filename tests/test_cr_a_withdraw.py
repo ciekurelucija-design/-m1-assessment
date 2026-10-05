@@ -132,8 +132,11 @@ def test_withdraw_logs_and_errors_have_no_personal_data(client, valid_payload, c
         valid_payload["personalCode"],
         valid_payload["fullName"],
         valid_payload["email"],
+        valid_payload["subject"],
         valid_payload["body"],
     ]
+    # Iemesls ir auditā, bet ne žurnālā
+    assert REASON not in caplog.text
     error_texts = [r.text for r in responses[1:]]
     for value in sensitive:
         assert value not in caplog.text

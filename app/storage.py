@@ -247,6 +247,31 @@ def update_status(submission_id: str, status: str) -> dict | None:
     return record
 
 
+def transition(
+    submission_id: str, allowed: set[str], status: str, action: str, detail: str
+) -> dict | None:
+    """Maina statusu un raksta auditu atomāri, ja pašreizējais statuss ir atļauts.
+
+    Atgriež atjaunoto ierakstu vai None, ja ID nav atrasts vai statuss nav atļauts.
+    """
+    # f-string ievieto tikai "?" zīmes. Vērtības ir parametri, nevis SQL daļa.
+    placeholders = ", ".join("?" for _ in allowed)
+    with _lock, _conn:
+        cursor = _conn.execute(
+            f"UPDATE submissions SET status = ? WHERE id = ? "
+            f"AND status IN ({placeholders})",
+            (status, submission_id, *sorted(allowed)),
+        )
+        if cursor.rowcount == 0:
+            return None
+        _conn.execute(
+            "INSERT INTO audit (submissionId, at, action, detail) VALUES (?, ?, ?, ?)",
+            (submission_id, clock.now().isoformat(), action, detail),
+        )
+    logger.info("Statuss mainīts: %s -> %s", submission_id, status)
+    return get(submission_id)
+
+
 def update_due_date(submission_id: str, due_date: str) -> dict:
     """Maina atbildes termiņu (ISO datums). Atgriež atjaunoto ierakstu."""
     with _lock:

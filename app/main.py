@@ -170,13 +170,18 @@ def get_submission_audit(submission_id: str) -> list[AuditEntry]:
     tags=["Darbības ar iesniegumu"],
 )
 def withdraw_submission(submission_id: str, data: WithdrawRequest) -> Submission:
-    record = storage.get(submission_id)
+    # Pārbaude un maiņa vienā solī: divas vienlaicīgas atsaukšanas nevar abas izdoties.
+    record = storage.transition(
+        submission_id,
+        WITHDRAWABLE,
+        SubmissionStatus.WITHDRAWN.value,
+        "WITHDRAW",
+        data.reason,
+    )
     if record is None:
-        raise SubmissionNotFound()
-    if record["status"] not in WITHDRAWABLE:
+        if storage.get(submission_id) is None:
+            raise SubmissionNotFound()
         raise InvalidState()
-    record = storage.update_status(submission_id, SubmissionStatus.WITHDRAWN.value)
-    storage.add_audit(submission_id, "WITHDRAW", data.reason)
     # Žurnālā tikai ID. Iemeslu neraksta: tajā var būt personas dati.
     logger.info("Iesniegums atsaukts: %s", submission_id)
     return Submission(**record)
