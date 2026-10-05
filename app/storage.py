@@ -3,6 +3,7 @@
 Pēc restarta dati atgriežas sākuma stāvoklī ar trim sintētiskiem iesniegumiem.
 """
 
+import json
 import logging
 import sqlite3
 import threading
@@ -254,13 +255,12 @@ def transition(
 
     Atgriež atjaunoto ierakstu vai None, ja ID nav atrasts vai statuss nav atļauts.
     """
-    # f-string ievieto tikai "?" zīmes. Vērtības ir parametri, nevis SQL daļa.
-    placeholders = ", ".join("?" for _ in allowed)
     with _lock, _conn:
+        # Atļautos statusus nodod kā vienu JSON parametru: SQL teksts nemainās.
         cursor = _conn.execute(
-            f"UPDATE submissions SET status = ? WHERE id = ? "
-            f"AND status IN ({placeholders})",
-            (status, submission_id, *sorted(allowed)),
+            "UPDATE submissions SET status = ? WHERE id = ? "
+            "AND status IN (SELECT value FROM json_each(?))",
+            (status, submission_id, json.dumps(sorted(allowed))),
         )
         if cursor.rowcount == 0:
             return None
